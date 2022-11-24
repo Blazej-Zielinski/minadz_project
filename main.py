@@ -1,5 +1,7 @@
 from mongoDBConnector import get_database
 import pandas as pd
+import csv
+import subprocess
 
 if __name__ == '__main__':
     db = get_database()
@@ -10,4 +12,8 @@ if __name__ == '__main__':
 
     collection_name.insert_many(df.to_dict('records'))
 
-
+    ddmp = subprocess.call(
+        'cat data/alcohol-consumption-vs-gdp-per-capita.csv | ' + \
+        './damaged_data_mapper.py | ' + \
+        './damaged_data_reducer.py > ' + \
+        'output.csv', shell=True)
