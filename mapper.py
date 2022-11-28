@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import sys
-import csv
 import string
 
 indexes = [0, 2, 3, 4]

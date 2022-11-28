@@ -53,47 +53,69 @@ def plot_qqplot(data_frame, path):
     plt.savefig(f'{path}/qq_GDP.png')
     plt.clf()
 
+def get_stats_for_df(data_frame, name):
+    return {
+        'name' : name,
+        'mean' : data_frame["Total alcohol consumption"].mean(),
+        'standard error' : data_frame["Total alcohol consumption"].sem(),
+        'median' : data_frame["Total alcohol consumption"].median(),
+        'standard deviation' : data_frame["Total alcohol consumption"].std(),
+        'variance' : data_frame["Total alcohol consumption"].var(),
+        'kurtosis' : data_frame["Total alcohol consumption"].kurtosis(),
+        'skewness' : data_frame["Total alcohol consumption"].skew(),
+        'min' : data_frame["Total alcohol consumption"].min(),
+        'max' : data_frame["Total alcohol consumption"].max(),
+        'sum' : data_frame["Total alcohol consumption"].sum(),
+        'number of records' : data_frame["Total alcohol consumption"].size
+    }
+
+def save_plots(data_frame, path):
+    plot_hists(data_frame, path)
+    plot_box_plots(data_frame, path)
+    plot_density(data_frame, path)
+    plot_qqplot(data_frame, path)
 
 if __name__ == '__main__':
     db = get_database()
     collection_name = db["alcohol_consumption"]
+    stats_collection_name = db["alcohol_consumption_stats"]
+    stats = []
 
-    # collection_name.drop()
-    # df = pd.read_csv(r'./output.csv', encoding='cp1252',
-    #                  names=["Entity", "Code", "Year", "Total alcohol consumption", "GDP per capita"])
-    # collection_name.insert_many(df.to_dict('records'))
+    subprocess.call(
+        'hdfs dfs -copyFromLocal ./data/alcohol-consumption-vs-gdp-per-capita.csv /user/kuba/project/input/', 
+        shell=True)
 
-    # ddmp = subprocess.call(
-    #     'cat data/alcohol-consumption-vs-gdp-per-capita.csv | ' + \
-    #     './damaged_data_mapper.py | ' + \
-    #     './damaged_data_reducer.py > ' + \
-    #     'output.csv', shell=True)
+    subprocess.call(
+        'hadoop jar ./jars/hadoop-streaming-2.7.3.jar ' + \
+        '-input /user/kuba/project/input/alcohol-consumption-vs-gdp-per-capita.csv ' + \
+        '-output /user/kuba/project/output ' + \
+        '-mapper ./mapper.py ' + \
+        '-reducer ./reducer.py', 
+        shell=True)
+
+    subprocess.call(
+        'hadoop fs -cat /user/kuba/project/output/* > ./output.csv', 
+        shell=True)
+
+    collection_name.drop()
+    stats_collection_name.drop()
+
+    df = pd.read_csv(r'./output.csv', encoding='cp1252',
+                     names=["Entity", "Code", "Year", "Total alcohol consumption", "GDP per capita"])
+    collection_name.insert_many(df.to_dict('records'))
 
     records = get_data_from_db(collection_name)
-
-    all_path = './plots/all'
-    plot_hists(records, all_path)
-    plot_box_plots(records, all_path)
-    plot_density(records, all_path)
-    plot_qqplot(records, all_path)
-    print(f'Kurtoza_all: {records["Total alcohol consumption"].kurtosis()}')
-    print(f'Skośność_all: {records["Total alcohol consumption"].skew()}')
+    save_plots(records, './plots/all')
+    stats.append(get_stats_for_df(records, 'all'))
 
     records_poor = records[records['GDP per capita'] < 13000]
+    save_plots(records_poor, './plots/poor')
+    stats.append(get_stats_for_df(records_poor, 'poor'))
+
     records_rich = records[records['GDP per capita'] >= 13000]
+    save_plots(records_rich, './plots/rich')
+    stats.append(get_stats_for_df(records_rich, 'rich'))
 
-    poor_path = './plots/poor'
-    plot_hists(records_poor, poor_path)
-    plot_box_plots(records_poor, poor_path)
-    plot_density(records_poor, poor_path)
-    plot_qqplot(records_poor, poor_path)
-    print(f'Kurtoza_poor: {records_poor["Total alcohol consumption"].kurtosis()}')
-    print(f'Skośność_poor: {records_poor["Total alcohol consumption"].skew()}')
+    stats_collection_name.insert_many(stats)
 
-    rich_path = './plots/rich'
-    plot_hists(records_rich, rich_path)
-    plot_box_plots(records_rich, rich_path)
-    plot_density(records_rich, rich_path)
-    plot_qqplot(records_rich, rich_path)
-    print(f'Kurtoza_rich: {records_rich["Total alcohol consumption"].kurtosis()}')
-    print(f'Skośność_rich: {records_rich["Total alcohol consumption"].skew()}')
+    print('Job finished succesfully!')

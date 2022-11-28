@@ -40,3 +40,8 @@ read output file from HDFS
 ```
     hdfs dfs -cat /user/kuba/project/output/*
 ```
+
+remove directory with all its content
+```
+    hdfs dfs -rm -r /user/kuba/project/output
+```
